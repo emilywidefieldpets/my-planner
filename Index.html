@@ -128,7 +128,18 @@
   /* board */
   .fil { display: flex; gap: 6px; flex-wrap: wrap; }
   .fil button { min-height: 38px; padding: 0 14px; border: 0; border-radius: 19px; font-size: 13px; font-weight: 600; color: #fff; opacity: .55; }
-  .fil button.on { opacity: 1; outline: 2px solid #fff; }
+  .fil button.on { opacity: 1; outline: 2px solid #1B2340; outline-offset: 1px; }
+  .bsec { background: #fff; border-radius: 14px; border: 1px solid #E3E5EE; }
+  .bsec.over { background: #F5F0FF; }
+  .bsh { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 0 16px; border: 0; background: none; text-align: left; font-size: 15px; font-weight: 600; color: #1B2340; }
+  .bsh .n { font-size: 13px; font-weight: 500; color: #6B7090; }
+  .bsh .chev { margin-left: auto; color: #8F95B5; transition: transform .15s; display: inline-flex; }
+  .bsec.open .bsh .chev { transform: rotate(90deg); }
+  .bsb { padding: 0 16px 8px; }
+  .bsb .row { gap: 10px; }
+  .bsb .row .t small { display: block; font-size: 12px; color: #6B7090; margin-top: 1px; }
+  .bsb .edge { width: 4px; align-self: stretch; border-radius: 2px; flex: none; }
+  .bsx { white-space: nowrap; font-size: 13px; font-weight: 500; min-height: 32px; padding: 0 10px; border: 1px solid #D6D8E3; border-radius: 8px; background: #fff; color: #1B2340; }
   .cols { display: flex; gap: 12px; overflow-x: auto; align-items: flex-start; padding-bottom: 6px; }
   .col { flex: 1 0 272px; background: #E9EBF3; border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-height: 200px; }
   .col.over { background: #DDE3F5; }
@@ -257,13 +268,14 @@ const S = {
   sugOff: {}, // suggestion ids you've unticked
   events: {}, fetched: {}, loadingWeek: {}, workDays: [],
   view: 'plan', mode: 'all', scale: window.innerWidth >= 900 ? 'week' : 'day',
-  sel: '', stream: 'NHS/Career', boardStream: '', hideDone: true, closed: {}
+  sel: '', stream: 'NHS/Career', boardStream: '', hideDone: true, closed: {},
+  bopen: { overdue: true, today: true, tomorrow: true, future: false, nodate: false }
 };
 try {
   const saved = JSON.parse(localStorage.getItem('planner.prefs') || '{}');
-  ['view', 'mode', 'scale', 'stream'].forEach(k => { if (saved[k]) S[k] = saved[k]; });
+  ['view', 'mode', 'scale', 'stream', 'bopen'].forEach(k => { if (saved[k]) S[k] = saved[k]; });
 } catch (e) {}
-function remember() { try { localStorage.setItem('planner.prefs', JSON.stringify({ view: S.view, mode: S.mode, scale: S.scale, stream: S.stream })); } catch (e) {} }
+function remember() { try { localStorage.setItem('planner.prefs', JSON.stringify({ view: S.view, mode: S.mode, scale: S.scale, stream: S.stream, bopen: S.bopen })); } catch (e) {} }
 
 /* ================= helpers ================= */
 const $ = (id) => document.getElementById(id);
@@ -644,29 +656,40 @@ function calGrid(days, inMode, withTasks) {
 function boardView() {
   const vs = visibleStreams();
   if (S.boardStream && !vs.find(s => s.name === S.boardStream)) S.boardStream = '';
-  const cutoff = addDays(today(), -14);
-  const items = tasks().filter(t => streamIn(t.stream) && (!S.boardStream || t.stream === S.boardStream))
-    .filter(t => live(t) || (t.completed || '').slice(0, 10) >= cutoff).sort(sortTasks);
-  let h = '<header><div class="top">' + modeSwitch() + '</div><h1>Board</h1><div class="fil" style="margin-top:14px">' +
+  const t0 = today(), t1 = addDays(t0, 1);
+  const items = tasks().filter(t => streamIn(t.stream) && t.stream && live(t) && (!S.boardStream || t.stream === S.boardStream)).sort(sortTasks);
+  const byDate = (a, b) => (a.due || '').localeCompare(b.due || '') || sortTasks(a, b);
+  const secs = [
+    ['overdue', 'Overdue', items.filter(t => isDay(t.due) && t.due < t0).sort(byDate), ''],
+    ['today', 'Today', items.filter(t => t.due === t0), t0],
+    ['tomorrow', 'Tomorrow', items.filter(t => t.due === t1), t1],
+    ['future', 'Future', items.filter(t => isDay(t.due) && t.due > t1).sort(byDate), ''],
+    ['nodate', 'No date', items.filter(t => !isDay(t.due)), '']
+  ];
+  let h = '<header><div class="top">' + modeSwitch() + '<button class="hbtn" data-act="new" data-stream="' + esc(S.boardStream) + '">+ Task</button></div><h1>Board</h1><div class="fil" style="margin-top:10px">' +
     '<button data-act="bstream" data-s="" class="' + (!S.boardStream ? 'on' : '') + '" style="background:#fff;color:#1B2340">All</button>' +
     vs.map(s => '<button data-act="bstream" data-s="' + esc(s.name) + '" class="' + (S.boardStream === s.name ? 'on' : '') + '" style="background:' + s.c + '">' + esc(s.name) + '</button>').join('') +
-    '</div></header><main><div class="cols">';
-  STATUSES.forEach(([st, label], i) => {
-    const col = items.filter(t => t.status === st);
-    h += '<div class="col" data-drop-status="' + st + '"><div class="colh"><span>' + label + '</span><span style="color:#6B7090">' + col.length + '</span></div>';
-    col.forEach(t => {
-      const s = sOf(t.stream);
-      h += '<div class="bcard" style="background:' + s.tint + (st === 'done' ? ';opacity:.7' : '') + '" draggable="true" data-drag="' + esc(t.id) + '">' +
-        '<span class="tag" style="color:' + s.dark + '">' + esc([s.name, pathOf(t)].filter(Boolean).join(' · ')) + '</span>' +
-        '<button class="t" data-act="edit" data-id="' + esc(t.id) + '">' + esc(t.title) + '</button><div class="foot">' + dueChip(t.due, st === 'done') + deadlineChip(t) +
-        (i > 0 ? '<button class="mv" data-act="move" data-id="' + esc(t.id) + '" data-to="' + STATUSES[i - 1][0] + '" aria-label="Move to ' + STATUSES[i - 1][1] + '">' + ICON_L + '</button>' : '') +
-        (i < 2 ? '<button class="mv" data-act="move" data-id="' + esc(t.id) + '" data-to="' + STATUSES[i + 1][0] + '" aria-label="Move to ' + STATUSES[i + 1][1] + '">' + ICON_R + '</button>' : '') +
-        '</div></div>';
-    });
-    if (st === 'todo') h += '<button class="add" data-act="new" data-stream="' + esc(S.boardStream) + '">+ Add task</button>';
-    h += '</div>';
+    '</div></header><main>';
+  secs.forEach(([key, label, list, day]) => {
+    if (key === 'overdue' && !list.length) return;
+    const open = !!S.bopen[key];
+    h += '<section class="bsec' + (open ? ' open' : '') + '"' + (day ? ' data-drop-day="' + day + '"' : '') + '>' +
+      '<div style="display:flex;align-items:center;padding-right:12px"><button class="bsh" data-act="bsec" data-k="' + key + '" aria-expanded="' + open + '">' + label +
+      ' <span class="n">' + list.length + '</span><span class="chev">' + ICON_R + '</span></button>' +
+      (key === 'overdue' && open ? '<button class="bsx" data-act="overdue-today">Move all to today</button>' : '') + '</div>';
+    if (open) {
+      h += '<div class="bsb">' + (list.length ? list.map(t => {
+        const st = sOf(t.stream);
+        const when = key === 'today' || key === 'tomorrow' ? (t.time ? '<span class="due">' + esc(t.time) + '</span>' : '') : dueChip(t.due, false);
+        return '<div class="row" draggable="true" data-drag="' + esc(t.id) + '"><span class="edge" style="background:' + st.c + '"></span>' +
+          '<input type="checkbox" data-act="done" data-id="' + esc(t.id) + '" style="accent-color:' + st.c + '" aria-label="Done: ' + esc(t.title) + '">' +
+          '<button class="t" data-act="edit" data-id="' + esc(t.id) + '">' + esc(t.title) + (t.group || t.project ? '<small>' + esc(t.group || t.project) + (t.status === 'doing' ? ' · in progress' : '') + '</small>' : (t.status === 'doing' ? '<small>in progress</small>' : '')) + '</button>' +
+          when + deadlineChip(t) + '</div>';
+      }).join('') : '<p class="muted" style="padding:4px 0 10px">Nothing here.</p>') + '</div>';
+    }
+    h += '</section>';
   });
-  return h + '</div><p class="muted">Done shows the last two weeks. Drag cards between columns, or use the arrows.</p></main>';
+  return h + '<p class="muted">Tap a heading to open or close it. On the Chromebook you can drag a task onto Today or Tomorrow.</p></main>';
 }
 
 /* ================= LIST ================= */
@@ -768,9 +791,19 @@ function ordinal(n) { n = parseInt(n, 10); const s = ['th', 'st', 'nd', 'rd'], v
 
 /* ================= render ================= */
 function render() {
-  const wide = (S.view === 'plan' && S.scale === 'week') || S.view === 'board';
+  const wide = S.view === 'plan' && S.scale === 'week';
   $('app').className = 'wrap' + (wide ? ' wide' : '') + ' m-' + S.mode;
   if (/iPhone|iPod/.test(navigator.userAgent)) document.body.classList.add('ios');
+  // opening today's plan: scroll so the current time is in view (once per day/view, not on every update)
+  if (S.view === 'plan' && S.events[mondayOf(S.sel || today())]) {
+    const key = [S.scale, S.sel, S.mode, today()].join('|');
+    const now = document.querySelector('.now');
+    if (S.scrolledKey !== key && now) {
+      S.scrolledKey = key;
+      const y = now.getBoundingClientRect().top + window.scrollY - window.innerHeight * 0.35;
+      if (y > 0) window.scrollTo(0, y);
+    } else if (!now) S.scrolledKey = key;
+  }
   const views = { plan: planView, board: boardView, list: listView, inbox: inboxView, routines: routinesView };
   $('app').innerHTML = (views[S.view] || planView)();
   const n = tasks().filter(t => !t.stream && live(t)).length;
@@ -1097,6 +1130,7 @@ document.addEventListener('click', e => {
     }
     case 'stream': S.stream = el.dataset.s; remember(); render(); break;
     case 'bstream': S.boardStream = el.dataset.s; render(); break;
+    case 'bsec': S.bopen[el.dataset.k] = !S.bopen[el.dataset.k]; remember(); render(); break;
     case 'hidedone': S.hideDone = !S.hideDone; render(); break;
     case 'file': if (task) { patch(id, { stream: el.dataset.s }); toast('Filed to ' + el.dataset.s); } break;
     case 'move': if (task) patch(id, { status: el.dataset.to }); break;
