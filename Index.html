@@ -937,6 +937,7 @@ function closeEditor() { $('modal').innerHTML = ''; }
 /* ================= data ================= */
 /* ================= server calls (all go through the PIN check) ================= */
 let PIN = ''; try { PIN = localStorage.getItem('planner.pin') || ''; } catch (e) {}
+if (!PIN && window.DEVICE_KEY) PIN = 'k:' + window.DEVICE_KEY;
 let pinWaiting = [];
 function run(name, args, ok, bad) {
   google.script.run.withSuccessHandler(res => {
@@ -974,8 +975,25 @@ function submitPin(form) {
     closeEditor();
     const waiting = pinWaiting; pinWaiting = [];
     if (waiting.length) waiting.forEach(fn => fn()); else load();
+    if (!window.DEVICE_KEY) setTimeout(offerDeviceLink, 400);
   }).withFailureHandler(err => { btn.disabled = false; $('pinmsg').textContent = err.message || String(err); })
     .api(f.pin, f.mode === 'setup' ? 'createPin' : 'checkPin', []);
+}
+
+function offerDeviceLink() {
+  if ($('modal').innerHTML) return;
+  $('modal').innerHTML = '<div class="veil"><div class="sheet" role="dialog" aria-label="Skip the PIN on this device">' +
+    '<h2>Skip the PIN on this device?</h2><p class="muted">This browser keeps forgetting your PIN. I can make a private link for this device that opens the planner without it. Save that link as your bookmark or home-screen icon instead of the usual one.</p>' +
+    '<div id="devlink"></div><div class="acts"><button type="button" class="cancel" data-act="close-btn">Not now</button><button type="button" class="save" id="mkdev">Make my link</button></div></div></div>';
+  $('mkdev').onclick = () => {
+    $('mkdev').disabled = true;
+    const label = /iPhone|iPad/.test(navigator.userAgent) ? 'iPhone' : /CrOS/.test(navigator.userAgent) ? 'Chromebook' : /Windows/.test(navigator.userAgent) ? 'Windows laptop' : 'Device';
+    run('makeDeviceLink', [label], r => {
+      $('devlink').innerHTML = '<label>Your link for this device<input readonly value="' + esc(r.url) + '" onclick="this.select()"></label>' +
+        '<p class="muted">Keep it private, like a password. Open it now, then bookmark it or add it to your home screen.</p>';
+      $('mkdev').outerHTML = '<a class="save" href="' + esc(r.url) + '" target="_top" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none">Open my link</a>';
+    }, err => { $('mkdev').disabled = false; toast('Couldn\'t make the link: ' + (err.message || err)); });
+  };
 }
 
 function load() {
