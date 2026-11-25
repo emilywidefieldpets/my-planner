@@ -21,6 +21,8 @@
   header .hbtn { background: rgba(255,255,255,.75); }
   .m-work header h1 { color: #4C1D95; } .m-life header h1 { color: #14583A; }
   @media (max-width: 699px) { header { position: static; padding-top: 20px; } }
+  /* iPhone draws the page under its status bar; leave room so the top row stays visible */
+  @media (max-width: 699px) { .ios header { padding-top: 58px; } }
   header .top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
   header .ctl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   header .sub { font-size: 13px; color: #6B7090; }
@@ -761,6 +763,7 @@ function ordinal(n) { n = parseInt(n, 10); const s = ['th', 'st', 'nd', 'rd'], v
 function render() {
   const wide = (S.view === 'plan' && S.scale === 'week') || S.view === 'board';
   $('app').className = 'wrap' + (wide ? ' wide' : '') + ' m-' + S.mode;
+  if (/iPhone|iPod/.test(navigator.userAgent)) document.body.classList.add('ios');
   const views = { plan: planView, board: boardView, list: listView, inbox: inboxView, routines: routinesView };
   $('app').innerHTML = (views[S.view] || planView)();
   const n = tasks().filter(t => !t.stream && live(t)).length;
