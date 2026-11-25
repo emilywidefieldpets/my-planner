@@ -523,7 +523,14 @@ function offPeriods(day) {
 }
 
 function calGrid(days, inMode, withTasks) {
-  const r = range(), t0 = today();
+  const r = Object.assign({}, range()), t0 = today();
+  // skip empty early hours: start an hour or so before the first thing on the grid (never later than 08:00)
+  if (S.mode !== 'work') {
+    const firsts = days.map(d => eventsOn(d).filter(e => !e.allDay && !isOff(e)).map(e => clipMins(e, d).s)
+      .concat(inMode.filter(t => t.due === d && onGrid(t) && live(t)).map(tStart))).flat();
+    const first = firsts.length ? Math.min.apply(null, firsts) : 9 * 60;
+    r.s = Math.max(r.s, Math.min(8, Math.floor((first - 30) / 60)));
+  }
   const STEP = S.mode === 'work' ? 30 : 60;        // Work: 30-minute blocks; Life/All: hourly
   const PX = S.mode === 'work' ? 88 : 56;          // pixels per hour
   const MINH = 42;                                 // shortest an item is drawn, so its name fits
