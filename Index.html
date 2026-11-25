@@ -239,7 +239,7 @@ const ICON_R = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stro
 const S = {
   data: { today: '', tasks: [], routines: [], calendars: [], groups: [], suggestions: [] },
   sugOff: {}, // suggestion ids you've unticked
-  events: {}, loadingWeek: {}, workDays: [],
+  events: {}, fetched: {}, loadingWeek: {}, workDays: [],
   view: 'plan', mode: 'all', scale: window.innerWidth >= 900 ? 'week' : 'day',
   sel: '', stream: 'NHS/Career', boardStream: '', hideDone: true, closed: {}
 };
@@ -389,10 +389,23 @@ function evStyle(e) {
     : 'background:' + wash(c.colour, .14) + ';border-left:3px solid ' + c.colour + ';color:#1B2340';
 }
 function ensureWeek(monday) {
-  if (S.events[monday] || S.loadingWeek[monday]) return;
+  if (S.fetched[monday] || S.loadingWeek[monday]) return;
+  const key = 'planner.ev.' + monday;
+  if (!S.events[monday]) { try { const c = JSON.parse(localStorage.getItem(key) || 'null'); if (Array.isArray(c)) S.events[monday] = c; } catch (e) {} }
   S.loadingWeek[monday] = true;
-  run('getEvents', [monday, addDays(monday, 7)], ev => { S.events[monday] = ev; delete S.loadingWeek[monday]; render(); },
-    err => { delete S.loadingWeek[monday]; S.events[monday] = []; toast('Couldn\'t load calendars: ' + (err.message || err)); render(); });
+  run('getEvents', [monday, addDays(monday, 7)], ev => {
+    S.events[monday] = ev; S.fetched[monday] = true; delete S.loadingWeek[monday];
+    try {
+      localStorage.setItem(key, JSON.stringify(ev));
+      const oldest = addDays(mondayOf(today()), -28);
+      Object.keys(localStorage).forEach(k => { if (k.indexOf('planner.ev.') === 0 && k.slice(11) < oldest) localStorage.removeItem(k); });
+    } catch (e) {}
+    render();
+  }, err => {
+    delete S.loadingWeek[monday]; S.fetched[monday] = true;
+    if (!S.events[monday]) S.events[monday] = [];
+    toast('Couldn\'t load calendars: ' + (err.message || err)); render();
+  });
 }
 
 /* ================= shared header bits ================= */
@@ -439,7 +452,7 @@ function planView() {
     '<button class="hbtn" data-act="shift" data-n="1" aria-label="Next">' + ICON_R + '</button></div></div>' +
     '<div class="sub">' + esc(sub) + '</div><h1>' + esc(title) + '</h1>' + prog + '</header><main>';
 
-  if (S.loadingWeek[mon]) h += '<p class="muted">Loading calendars…</p>';
+  if (S.loadingWeek[mon] && !S.events[mon]) h += '<p class="muted">Loading calendars…</p>';
   if (overdue.length && (S.scale === 'week' || S.sel === today())) {
     h += '<div class="banner"><span>' + overdue.length + ' overdue:</span><span style="font-weight:500">' +
       overdue.slice(0, 3).map(t => esc(t.title)).join(', ') + (overdue.length > 3 ? '…' : '') + '</span>' +
@@ -862,7 +875,7 @@ function submitEvent(form) {
   run('createEvent', [ev], () => {
     closeEditor();
     // reload the affected week(s) of events
-    Object.keys(S.events).forEach(k => { if (k === mondayOf(ev.date) || (ev.endDate && k <= mondayOf(ev.endDate) && k >= mondayOf(ev.date))) delete S.events[k]; });
+    Object.keys(S.events).forEach(k => { if (k === mondayOf(ev.date) || (ev.endDate && k <= mondayOf(ev.endDate) && k >= mondayOf(ev.date))) { delete S.events[k]; delete S.fetched[k]; } });
     toast('Event added'); render();
   }, err => { btn.disabled = false; btn.textContent = 'Add event'; toast(err.message || String(err)); });
 }
