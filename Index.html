@@ -15,7 +15,12 @@
   .wrap.wide { max-width: 1280px; }
   .sr { position: absolute; left: -9999px; }
 
-  header { position: sticky; top: 0; z-index: 8; background: #fff; color: #1B2340; padding: 10px 20px 10px; padding-top: max(10px, env(safe-area-inset-top)); border-bottom: 1px solid #E3E5EE; }
+  header { position: sticky; top: 0; z-index: 8; background: #fff; color: #1B2340; padding: 10px 20px 10px; padding-top: max(10px, env(safe-area-inset-top)); border-radius: 0 0 18px 18px; box-shadow: 0 1px 0 rgba(27,35,64,.06); }
+  .m-all header { background: #E7EAF7; } .m-work header { background: #EFE8FD; } .m-life header { background: #E3F2EA; }
+  .m-all header .seg, .m-work header .seg, .m-life header .seg { background: rgba(255,255,255,.6); }
+  header .hbtn { background: rgba(255,255,255,.75); }
+  .m-work header h1 { color: #4C1D95; } .m-life header h1 { color: #14583A; }
+  @media (max-width: 699px) { header { position: static; padding-top: 20px; } }
   header .top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
   header .ctl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   header .sub { font-size: 13px; color: #6B7090; }
@@ -755,7 +760,7 @@ function ordinal(n) { n = parseInt(n, 10); const s = ['th', 'st', 'nd', 'rd'], v
 /* ================= render ================= */
 function render() {
   const wide = (S.view === 'plan' && S.scale === 'week') || S.view === 'board';
-  $('app').className = 'wrap' + (wide ? ' wide' : '');
+  $('app').className = 'wrap' + (wide ? ' wide' : '') + ' m-' + S.mode;
   const views = { plan: planView, board: boardView, list: listView, inbox: inboxView, routines: routinesView };
   $('app').innerHTML = (views[S.view] || planView)();
   const n = tasks().filter(t => !t.stream && live(t)).length;
