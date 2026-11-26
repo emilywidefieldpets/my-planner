@@ -936,6 +936,7 @@ function closeEditor() { $('modal').innerHTML = ''; }
 
 /* ================= data ================= */
 /* ================= server calls (all go through the PIN check) ================= */
+const PLANNER_URL = 'https://script.google.com/a/macros/powerthrunutrition.co.uk/s/AKfycbxRKCOAkwODEQINq0OpEmPCU3Fu60g6LgnMrVXqItAWusPjv3uciifX3YNK_iUe2BMt/exec';
 let PIN = ''; try { PIN = localStorage.getItem('planner.pin') || ''; } catch (e) {}
 if (!PIN && window.DEVICE_KEY) PIN = 'k:' + window.DEVICE_KEY;
 let pinWaiting = [];
@@ -989,6 +990,9 @@ function offerDeviceLink() {
     $('mkdev').disabled = true;
     const label = /iPhone|iPad/.test(navigator.userAgent) ? 'iPhone' : /CrOS/.test(navigator.userAgent) ? 'Chromebook' : /Windows/.test(navigator.userAgent) ? 'Windows laptop' : 'Device';
     run('makeDeviceLink', [label], r => {
+      // Google sometimes hands back its editor-only (/dev) address, so always build the link on the normal planner address
+      const key = (String(r.url).match(/[?&]k=([a-f0-9]+)/) || [])[1];
+      if (key) r.url = PLANNER_URL + '?k=' + key;
       $('devlink').innerHTML = '<label>Your link for this device<input readonly value="' + esc(r.url) + '" onclick="this.select()"></label>' +
         '<p class="muted">Keep it private, like a password. Open it now, then bookmark it or add it to your home screen.</p>';
       $('mkdev').outerHTML = '<a class="save" href="' + esc(r.url) + '" target="_top" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none">Open my link</a>';
